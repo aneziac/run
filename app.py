@@ -1,6 +1,7 @@
 import pygame as pg
 import math
 import os
+import random
 
 
 class Player(pg.sprite.Sprite):
@@ -10,7 +11,7 @@ class Player(pg.sprite.Sprite):
         self.iypos = SCREEN_HEIGHT - 110
 
         self.polygon_verts = polygon_verts
-        self.threshold = threshold
+        self.threshold = threshold * 0.8
 
         self.counter = 0
 
@@ -31,27 +32,27 @@ class Player(pg.sprite.Sprite):
         self.ypos -= self.yvel
 
         if keys[pg.K_a]:
-            self.xpos -= 3
+            self.xpos -= 5
         if keys[pg.K_d]:
-            self.xpos += 3
+            self.xpos += 5
 
         if self.xpos < SCREEN_WIDTH // 2 - self.threshold:
             self.rotate_world(False)
+            self.sign = -1
         elif self.xpos > SCREEN_WIDTH // 2 + self.threshold - self.sprite.get_width():
             self.rotate_world()
+            self.sign = 1
 
-        if self.counter > 0:
+        if self.counter < 0 and self.ypos >= self.iypos - 40:
+            self.counter = self.rotation_speed
+            self.ypos = self.iypos - 100
+            self.xpos = SCREEN_WIDTH // 2 - (self.sprite.get_width() // 2) - (self.sign * 50)
+        elif self.counter > 0:
             self.rotation += 2 * self.sign * math.pi / self.polygon_verts / self.rotation_speed
             self.counter -= 1
 
     def rotate_world(self, sign=True):
-        if sign:
-            self.sign = 1
-        else:
-            self.sign = -1
-        self.ypos = self.iypos - 100
-        self.xpos = SCREEN_WIDTH // 2 + (sign * 30)
-        self.counter = self.rotation_speed
+        self.counter = -self.rotation_speed
 
 
 class World:
@@ -60,14 +61,14 @@ class World:
         self.polygon_verts = verts
 
         self.log_base = 2
-        self.vanish_polygon_radius = 0
+        self.vanish_polygon_radius = 10
 
         self.render_distance = 15
         self.back_render_distance = 2
 
         self.height_offset = 100
 
-        self.create_map(50)
+        self.create_map(100)
         self.create_lines()
 
     def create_lines(self):
@@ -80,7 +81,10 @@ class World:
         self.world_map = [[1] * self.polygon_verts for _ in range(world_depth)]
         self.world_map = self.world_map + [[0] * self.polygon_verts for _ in range(2 * self.render_distance)]
 
-        self.world_map[13][0] = 0
+        for x in range(len(self.world_map)):
+            for y in range(self.polygon_verts):
+                    if random.random() > 0.7:
+                        self.world_map[x][y] = 0         
 
     def project_vertices(self, depth):
         depth_offset = depth - math.floor(depth)
@@ -95,7 +99,7 @@ class World:
 
             projected_verts.append([round(proj_dist * math.sin(math.pi / self.polygon_verts)) + self.x_offset, round(SCREEN_HEIGHT - (proj_dist * math.cos(math.pi / self.polygon_verts)))])
 
-        projected_verts[:self.back_render_distance] = projected_verts[self.back_render_distance::-1]
+        projected_verts[:self.back_render_distance - 1] = projected_verts[self.back_render_distance - 1:0:-1]
 
         return projected_verts
 
@@ -107,7 +111,7 @@ class Game:
         self.screen = pg.display.set_mode([SCREEN_WIDTH, SCREEN_HEIGHT])
         self.depth = 1
 
-        self.world = World([0, 255, 0], 6)
+        self.world = World([0, 255, 0], 8)
         self.player = Player(self.world.x_offset, self.world.polygon_verts)
 
         self.game_loop()
@@ -145,6 +149,8 @@ class Game:
             for v in range(self.world.polygon_verts):
                 if self.world.world_map[x + math.floor(self.depth)][v] == 1:
                     pg.draw.polygon(self.screen, [0, 255 - x * 10, 0], build(x, v) + build(x + 1, v) + build(x + 1, v + 1) + build(x, v + 1))
+
+        pg.draw.circle(self.screen, (0, 0, 0), (SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2 - self.world.height_offset), self.world.vanish_polygon_radius)
 
     def render_player(self):
         self.screen.blit(self.player.sprite, (round(self.player.xpos), round(self.player.ypos)))
