@@ -1,11 +1,57 @@
 import pygame as pg
 import math
+import os
 
 
-class Player:
-    def __init__(self):
-        self.player_x = SCREEN_WIDTH // 2
-        self.player_y = 30
+class Player(pg.sprite.Sprite):
+    def __init__(self, threshold, polygon_verts):
+        self.sprite = pg.transform.smoothscale(pg.image.load(os.path.join('assets', 'sprite.png')), (100, 100))
+        self.xpos = SCREEN_WIDTH // 2 - self.sprite.get_width() // 2
+        self.iypos = SCREEN_HEIGHT - 110
+
+        self.polygon_verts = polygon_verts
+        self.threshold = threshold
+
+        self.counter = 0
+
+        self.ypos = self.iypos
+        self.yacc = -0.2
+        self.yvel = 0
+        self.rotation = 0
+        self.rotation_speed = 30
+        super().__init__()
+
+    def update(self, keys):
+        if self.ypos < self.iypos:
+            self.yvel += self.yacc
+        elif keys[pg.K_w]:
+            self.yvel = 8
+        else:
+            self.yvel = 0
+        self.ypos -= self.yvel
+
+        if keys[pg.K_a]:
+            self.xpos -= 3
+        if keys[pg.K_d]:
+            self.xpos += 3
+
+        if self.xpos < SCREEN_WIDTH // 2 - self.threshold:
+            self.rotate_world(False)
+        elif self.xpos > SCREEN_WIDTH // 2 + self.threshold - self.sprite.get_width():
+            self.rotate_world()
+
+        if self.counter > 0:
+            self.rotation += 2 * self.sign * math.pi / self.polygon_verts / self.rotation_speed
+            self.counter -= 1
+
+    def rotate_world(self, sign=True):
+        if sign:
+            self.sign = 1
+        else:
+            self.sign = -1
+        self.ypos = self.iypos - 100
+        self.xpos = SCREEN_WIDTH // 2 + (sign * 30)
+        self.counter = self.rotation_speed
 
 
 class World:
@@ -18,6 +64,8 @@ class World:
 
         self.render_distance = 15
         self.back_render_distance = 2
+
+        self.height_offset = 100
 
         self.create_map(50)
         self.create_lines()
@@ -59,8 +107,8 @@ class Game:
         self.screen = pg.display.set_mode([SCREEN_WIDTH, SCREEN_HEIGHT])
         self.depth = 1
 
-        self.player = Player()
         self.world = World([0, 255, 0], 6)
+        self.player = Player(self.world.x_offset, self.world.polygon_verts)
 
         self.game_loop()
 
@@ -71,29 +119,35 @@ class Game:
                 self.running = False
 
             self.screen.fill([0] * 3)
-            projected_verts = self.world.project_vertices(self.depth)
 
+            projected_verts = self.world.project_vertices(self.depth)
             self.render_world(projected_verts)
+
+            self.player.update(keys)
+            self.render_player()
             self.depth += 0.05
 
             pg.display.update()
 
-    @staticmethod
-    def rotate(coords, theta):
+    def rotate(self, coords, theta):
+        theta += self.player.rotation
         x, y = coords
         tx, ty = x - (SCREEN_WIDTH // 2), y - (SCREEN_HEIGHT // 2)
         rx, ry = round(tx * math.cos(theta) - ty * math.sin(theta)), round(tx * math.sin(theta) + ty * math.cos(theta))
-        return [rx + (SCREEN_WIDTH // 2), ry + (SCREEN_HEIGHT // 2) - 50]
+        return [rx + (SCREEN_WIDTH // 2), ry + (SCREEN_HEIGHT // 2) - self.world.height_offset]
 
     def render_world(self, projected_verts):
         def build(x, v):
-            return [Game.rotate(projected_verts[x], self.world.polygon_ang * v)]
+            return [self.rotate(projected_verts[x], self.world.polygon_ang * v)]
 
         # draw projected vertices
         for x in range(self.world.render_distance + self.world.back_render_distance - 1):
             for v in range(self.world.polygon_verts):
                 if self.world.world_map[x + math.floor(self.depth)][v] == 1:
                     pg.draw.polygon(self.screen, [0, 255 - x * 10, 0], build(x, v) + build(x + 1, v) + build(x + 1, v + 1) + build(x, v + 1))
+
+    def render_player(self):
+        self.screen.blit(self.player.sprite, (round(self.player.xpos), round(self.player.ypos)))
 
 
 if __name__ == '__main__':
