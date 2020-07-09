@@ -16,7 +16,10 @@ class Player(pg.sprite.Sprite):
         self.polygon_verts = polygon_verts
         self.world_map = world_map
 
-        self.threshold = SCREEN_HEIGHT // 2 * math.tan(math.pi / self.polygon_verts)
+        threshold = SCREEN_HEIGHT // 2 * math.tan(math.pi / self.polygon_verts)
+        self.left_threshold = SCREEN_WIDTH // 2 - threshold - (self.sprite.get_width() // 2)
+        self.right_threshold = SCREEN_WIDTH // 2 + threshold - (self.sprite.get_width() // 2)
+
         self.counter = 0
         self.rotation = 0
 
@@ -48,23 +51,20 @@ class Player(pg.sprite.Sprite):
             self.xpos += 7
 
         if self.counter == 0:
-            if self.xpos < SCREEN_WIDTH // 2 - self.threshold:
-                self.rotate_world(False)
+            if self.xpos < self.left_threshold:
+                self.counter = -self.rotation_speed
                 self.sign = -1
-            elif self.xpos > SCREEN_WIDTH // 2 + self.threshold - self.sprite.get_width():
-                self.rotate_world()
+            elif self.xpos > self.right_threshold:
+                self.counter = -self.rotation_speed
                 self.sign = 1
 
         if self.counter < 0 and self.ypos >= self.iypos - 40:
             self.counter = self.rotation_speed
             self.ypos = self.iypos - 100
-            self.xpos = SCREEN_WIDTH // 2 - (self.sprite.get_width() // 2) - (self.sign * 50)
+            self.xpos = SCREEN_WIDTH // 2 - (self.sprite.get_width() // 2)# - (self.sign * 50)
         elif self.counter > 0:
             self.rotation += 2 * self.sign * math.pi / self.polygon_verts / self.rotation_speed
             self.counter -= 1
-
-    def rotate_world(self, sign=True):
-        self.counter = -self.rotation_speed
 
 
 class World:
@@ -79,6 +79,7 @@ class World:
         self.back_render_distance = 2
 
         self.height_offset = 100
+        self.safe_area = 10
 
         self.create_map(100)
         self.create_lines()
@@ -99,12 +100,10 @@ class World:
         self.world_map = [[1] * self.polygon_verts for _ in range(world_depth)]
         self.world_map = self.world_map + [[0] * self.polygon_verts for _ in range(2 * self.render_distance)]
 
-        for x in range(len(self.world_map) - 10):
+        for x in range(len(self.world_map) - self.safe_area):
             for y in range(self.polygon_verts):
-                    if random.random() > 0.6:
-                        self.world_map[x + 10][y] = 0
-
-        self.world_map[2][3] = 0       
+                if random.random() > 0.6:
+                    self.world_map[x + self.safe_area][y] = 0
 
     def project_vertices(self, depth):
         depth_offset = depth - math.floor(depth)
@@ -132,7 +131,7 @@ class Game:
         self.depth = 1
         self.game_speed = 0.05
 
-        self.world = World([0, 255, 0], 5)
+        self.world = World([0, 255, 0], 8)
         self.player = Player(self.world.polygon_verts, self.world.world_map)
 
         self.game_loop()
@@ -167,22 +166,29 @@ class Game:
 
         # draw stars
         for x in self.world.stars:
-            pg.draw.circle(self.screen, [x[3]] * 3, rotate([x[0], x[1]], self.player.rotation), x[2])
+            self.draw_circle(rotate(x[:2], self.player.rotation), x[2], [x[3]] * 3)
 
         # draw projected vertices
         for x in range(self.world.render_distance + self.world.back_render_distance - 1):
             for v in range(self.world.polygon_verts):
                 if self.world.world_map[x + math.floor(self.depth)][v] == 1:
-                    color = [0, 255 - x * 10, 0]
+                    color = [0, 255 - x * 15, 0]
                     vertices = build(x, v) + build(x + 1, v) + build(x + 1, v + 1) + build(x, v + 1)
-                    pg.draw.polygon(self.screen, color, vertices)
-                    pg.gfxdraw.aapolygon(self.screen, vertices, color)
+                    self.draw_polygon(vertices, color)
 
         # draw vanishing point
         pg.draw.circle(self.screen, (0, 0, 0), (SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2 - self.world.height_offset), self.world.vanish_polygon_radius)
 
     def render_player(self):
         self.screen.blit(self.player.sprite, (round(self.player.xpos), round(self.player.ypos)))
+
+    def draw_polygon(self, vertices, color):
+        pg.gfxdraw.aapolygon(self.screen, vertices, color)
+        pg.gfxdraw.filled_polygon(self.screen, vertices, color)
+
+    def draw_circle(self, coords, radius, color):
+        pg.gfxdraw.aacircle(self.screen, coords[0], coords[1], radius, color)
+        pg.gfxdraw.filled_circle(self.screen, coords[0], coords[1], radius, color)
 
 if __name__ == '__main__':
     SCREEN_WIDTH, SCREEN_HEIGHT = 900, 600
