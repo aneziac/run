@@ -4,7 +4,9 @@ os.environ['PYGAME_HIDE_SUPPORT_PROMPT'] = "hide"
 import pygame as pg
 from pygame import gfxdraw
 import math
+import time
 from random import random, randint
+import sys
 
 
 class Player(pg.sprite.Sprite):
@@ -22,7 +24,8 @@ class Player(pg.sprite.Sprite):
         self.rotation = 0
         self.ROTATION_SPEED = 15
 
-        self.xpos = SCREEN_WIDTH // 2 - self.SPRITE.get_width() // 2
+        self.RESTING_XPOS = SCREEN_WIDTH // 2 - self.SPRITE.get_width() // 2
+        self.xpos = self.RESTING_XPOS
         self.STRAFE_SPEED = 7
 
         self.RESTING_YPOS = SCREEN_HEIGHT - 110
@@ -42,8 +45,7 @@ class Player(pg.sprite.Sprite):
         self.ypos -= self.yvel
 
         if self.ypos > SCREEN_HEIGHT + 20:
-            print("You lost")
-            quit()
+            return "Loss"
 
         if keys[pg.K_a]:
             self.xpos -= self.STRAFE_SPEED
@@ -128,8 +130,14 @@ class Game:
         self.game_clock = pg.time.Clock()
 
         self.running = True
-        self.screen = pg.display.set_mode([SCREEN_WIDTH, SCREEN_HEIGHT], pg.DOUBLEBUF)
+
+        flags = pg.DOUBLEBUF | pg.FULLSCREEN
+        if len(sys.argv) > 1:
+            if "w" in sys.argv[1]:
+                flags = pg.DOUBLEBUF
+        self.screen = pg.display.set_mode([SCREEN_WIDTH, SCREEN_HEIGHT], flags)
         self.screen.set_alpha(None)
+
         self.depth = 1
         self.GAME_SPEED = 0.05
 
@@ -149,7 +157,12 @@ class Game:
             projected_verts = self.world.project_vertices(self.depth)
             self.render_world(projected_verts)
 
-            self.player.update(keys, self.depth)
+            if self.player.update(keys, self.depth) == "Loss":
+                time.sleep(1)
+                self.depth = 1
+                self.player.xpos = self.player.RESTING_XPOS
+                self.player.ypos = self.player.RESTING_YPOS
+
             self.render_player()
             self.depth += self.GAME_SPEED
 
