@@ -89,11 +89,11 @@ class World:
         self.X_OFFSET = round(SCREEN_WIDTH / 2 - ((SCREEN_HEIGHT / 2) * math.tan(math.pi / self.POLYGON_VERTS)))
         self.CENTRAL_ANGLE = 2 * math.pi / self.POLYGON_VERTS
 
-    def create_stars(self, amount=80):
+    def create_stars(self, amount=150):
         self.stars = []
         size = max(SCREEN_WIDTH, SCREEN_HEIGHT)
         for x in range(amount):
-            self.stars.append([randint(0, SCREEN_WIDTH - 1), randint(0, SCREEN_HEIGHT - 1), randint(2, 4), randint(50, 255)])
+            self.stars.append([randint(0, SCREEN_WIDTH - 1), randint(0, SCREEN_HEIGHT - 1), randint(1, 2), randint(100, 255)])
 
     def create_map(self, safe_area=10, world_depth=100):
         self.world_map = [[1] * self.POLYGON_VERTS for _ in range(world_depth)]
@@ -125,11 +125,17 @@ class World:
 class Game:
     def __init__(self):
         pg.init()
+        pg.font.init()
         pg.event.set_blocked(None)
         pg.event.set_allowed([pg.QUIT])
         self.game_clock = pg.time.Clock()
+        self.font = pg.font.Font("assets/font/retro.ttf", 100)
+        pg.mouse.set_visible(False)
 
+        self.wait = False
+        self.last_time = time.time()
         self.running = True
+        self.title = True
 
         flags = pg.DOUBLEBUF | pg.FULLSCREEN
         if len(sys.argv) > 1:
@@ -140,6 +146,7 @@ class Game:
 
         self.depth = 1
         self.GAME_SPEED = 0.05
+        self.life = 1
 
         self.world = World([0, 255, 0], 8)
         self.player = Player(self.world)
@@ -151,22 +158,36 @@ class Game:
             keys = pg.key.get_pressed()
             if len(pg.event.get()) > 0 or keys[pg.K_ESCAPE]:
                 self.running = False
+            if keys[pg.K_w] or keys[pg.K_a] or keys[pg.K_s] or keys[pg.K_d]:
+                self.title = False
 
             self.screen.fill([0] * 3)
 
             projected_verts = self.world.project_vertices(self.depth)
             self.render_world(projected_verts)
 
-            if self.player.update(keys, self.depth) == "Loss":
-                time.sleep(1)
+            self.render_player()
+            if self.wait and time.time() - self.last_time > 2:
+                self.wait = False
                 self.depth = 1
                 self.player.xpos = self.player.RESTING_XPOS
                 self.player.ypos = self.player.RESTING_YPOS
+                self.life += 1
+            elif self.wait:
+                self.render_text("You fell!")
 
-            self.render_player()
-            self.depth += self.GAME_SPEED
+            if self.title:
+                self.render_text("Run!")
+            elif not self.wait:
+                if self.depth < 4:
+                    self.render_text(str(self.life))
+                if self.player.update(keys, self.depth) == "Loss":
+                    self.wait = True
+                    self.last_time = time.time()
 
-            self.game_clock.tick()
+                self.depth += self.GAME_SPEED
+                self.game_clock.tick()
+
             pg.display.update()
 
     def render_world(self, projected_verts):
@@ -193,7 +214,7 @@ class Game:
                     self.draw_polygon(vertices, color)
 
         # draw vanishing point
-        pg.draw.circle(self.screen, (0, 0, 0), (SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2 - self.world.height_offset), self.world.VANISH_RADIUS)
+        self.draw_circle([SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2 - self.world.height_offset], self.world.VANISH_RADIUS, (0, 0, 0))
 
     def render_player(self):
         self.screen.blit(self.player.SPRITE, (round(self.player.xpos), round(self.player.ypos)))
@@ -212,7 +233,14 @@ class Game:
             x, y = x
         return x > 0 and x < SCREEN_WIDTH and y > 0 and y < SCREEN_HEIGHT
 
+    def render_text(self, text, location=None, color=[100, 0, 0]):
+        if not location:
+            location = [SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2]
+        rendered_text = self.font.render(text, True, color)
+        location = [location[x] - (self.font.size(text)[x] // 2) for x in range(len(location))]
+        self.screen.blit(rendered_text, location)
+
 
 if __name__ == '__main__':
     SCREEN_WIDTH, SCREEN_HEIGHT = 900, 600
-    game = Game()
+    Game()
