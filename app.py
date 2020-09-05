@@ -60,7 +60,7 @@ class Player(pg.sprite.Sprite):
         if self.counter < 0 and self.ypos >= self.RESTING_YPOS - 40:
             self.counter = self.ROTATION_SPEED
             self.ypos = self.RESTING_YPOS - 100
-            self.xpos = SCREEN_WIDTH // 2 - (self.SPRITE.get_width() // 2)
+            self.xpos = self.RESTING_XPOS
         elif self.counter > 0:
             self.rotation += 2 * math.pi * self.direction / self.world.POLYGON_VERTS / self.ROTATION_SPEED
             self.counter -= 1
@@ -79,7 +79,7 @@ class World:
 
         self.height_offset = 100
 
-        self.create_map()
+        self.create_map(world_depth=randint(70, 130))
         self.create_lines()
         self.create_stars()
 
@@ -93,7 +93,7 @@ class World:
         self.stars = []
         size = max(SCREEN_WIDTH, SCREEN_HEIGHT)
         for x in range(amount):
-            self.stars.append([randint(0, SCREEN_WIDTH - 1), randint(0, SCREEN_HEIGHT - 1), randint(1, 2), randint(100, 255)])
+            self.stars.append([randint(0, size - 1), randint(0, size - 1), randint(1, 2), randint(100, 255)])
 
     def create_map(self, safe_area=10, world_depth=100):
         self.world_map = [[1] * self.POLYGON_VERTS for _ in range(world_depth)]
@@ -130,6 +130,7 @@ class Game:
         pg.event.set_allowed([pg.QUIT])
         self.game_clock = pg.time.Clock()
         self.font = pg.font.Font("assets/font/retro.ttf", 100)
+        self.small_font = pg.font.Font("assets/font/retro.ttf", 30)
         pg.mouse.set_visible(False)
 
         self.wait = False
@@ -147,8 +148,12 @@ class Game:
         self.depth = 1
         self.GAME_SPEED = 0.05
         self.life = 1
+        self.level = 1
 
-        self.world = World([0, 255, 0], 8)
+        color = [randint(100, 255), randint(100, 255)]
+        if random() > 0.5:
+            color = color[::-1]
+        self.world = World(color, randint(4, 10))
         self.player = Player(self.world)
 
         self.game_loop()
@@ -158,7 +163,7 @@ class Game:
             keys = pg.key.get_pressed()
             if len(pg.event.get()) > 0 or keys[pg.K_ESCAPE]:
                 self.running = False
-            if keys[pg.K_w] or keys[pg.K_a] or keys[pg.K_s] or keys[pg.K_d]:
+            if keys[pg.K_SPACE]:
                 self.title = False
 
             self.screen.fill([0] * 3)
@@ -167,28 +172,42 @@ class Game:
             self.render_world(projected_verts)
 
             self.render_player()
+            if self.depth > 100:
+                self.wait = True
+                self.reset_player()
+
             if self.wait and time.time() - self.last_time > 2:
-                self.wait = False
-                self.depth = 1
-                self.player.xpos = self.player.RESTING_XPOS
-                self.player.ypos = self.player.RESTING_YPOS
-                self.life += 1
+                if self.depth == 1:
+                    pass
+                else:
+                    self.wait = False
+                    self.reset_player()
+                    self.life += 1
             elif self.wait:
                 self.render_text("You fell!")
 
             if self.title:
                 self.render_text("Run!")
+                self.render_text("Press space", location=[SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2 + 70], font=self.small_font)
             elif not self.wait:
                 if self.depth < 4:
                     self.render_text(str(self.life))
                 if self.player.update(keys, self.depth) == "Loss":
-                    self.wait = True
-                    self.last_time = time.time()
+                    self.reset_clock()
 
                 self.depth += self.GAME_SPEED
                 self.game_clock.tick()
 
             pg.display.update()
+
+    def reset_player(self):
+        self.depth = 1
+        self.player.xpos = self.player.RESTING_XPOS
+        self.player.ypos = self.player.RESTING_YPOS
+
+    def reset_clock(self):
+        self.wait = True
+        self.last_time = time.time()
 
     def render_world(self, projected_verts):
         def build(x, v):
@@ -209,7 +228,7 @@ class Game:
         for x in range(self.world.RENDER_DISTANCE + self.world.BACK_RENDER_DISTANCE - 1):
             for v in range(self.world.POLYGON_VERTS):
                 if self.world.world_map[x + math.floor(self.depth)][v] == 1:
-                    color = [0, 255 - x * 15, 0]
+                    color = [0, max(0, self.world.WORLD_COLOR[0] - x * 12), max(0, self.world.WORLD_COLOR[1] - x * 12)]
                     vertices = build(x, v) + build(x + 1, v) + build(x + 1, v + 1) + build(x, v + 1)
                     self.draw_polygon(vertices, color)
 
@@ -220,24 +239,26 @@ class Game:
         self.screen.blit(self.player.SPRITE, (round(self.player.xpos), round(self.player.ypos)))
 
     def draw_polygon(self, vertices, color):
-        pg.gfxdraw.aapolygon(self.screen, vertices, color)
         pg.gfxdraw.filled_polygon(self.screen, vertices, color)
+        pg.gfxdraw.aapolygon(self.screen, vertices, color)
 
     def draw_circle(self, coords, radius, color):
         if coords[0] + radius > 0 and coords[0] - radius < SCREEN_WIDTH and coords[1] + radius > 0 and coords[1] - radius < SCREEN_HEIGHT:
-            pg.gfxdraw.aacircle(self.screen, coords[0], coords[1], radius, color)
             pg.gfxdraw.filled_circle(self.screen, coords[0], coords[1], radius, color)
+            pg.gfxdraw.aacircle(self.screen, coords[0], coords[1], radius, color)
 
     def is_onscreen(self, x, y=None):
         if y is None:
             x, y = x
         return x > 0 and x < SCREEN_WIDTH and y > 0 and y < SCREEN_HEIGHT
 
-    def render_text(self, text, location=None, color=[100, 0, 0]):
+    def render_text(self, text, location=None, color=[100, 0, 0], font=None):
         if not location:
             location = [SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2]
-        rendered_text = self.font.render(text, True, color)
-        location = [location[x] - (self.font.size(text)[x] // 2) for x in range(len(location))]
+        if not font:
+            font = self.font
+        rendered_text = font.render(text, True, color)
+        location = [location[x] - (font.size(text)[x] // 2) for x in range(len(location))]
         self.screen.blit(rendered_text, location)
 
 
