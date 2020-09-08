@@ -45,7 +45,7 @@ class Player(pg.sprite.Sprite):
         self.ypos -= self.yvel
 
         if self.ypos > SCREEN_HEIGHT + 20:
-            return "Loss"
+            return True
 
         if keys[pg.K_a]:
             self.xpos -= self.STRAFE_SPEED
@@ -67,19 +67,20 @@ class Player(pg.sprite.Sprite):
 
 
 class World:
-    def __init__(self, color, verts):
-        self.WORLD_COLOR = color
-        self.POLYGON_VERTS = verts
+    def __init__(self, level):
+        self.WORLD_COLOR = [randint(0, 100), randint(100, 255), randint(100, 255)]
+        self.POLYGON_VERTS = randint(4, 10)
 
         self.LOG_BASE = 2
         self.VANISH_RADIUS = 10
 
         self.RENDER_DISTANCE = 15
         self.BACK_RENDER_DISTANCE = 2
+        self.WORLD_DEPTH = randint(level * 5 + 20, level * 6 + 30)
 
         self.height_offset = 100
 
-        self.create_map(world_depth=randint(70, 130))
+        self.create_map(world_depth=self.WORLD_DEPTH)
         self.create_lines()
         self.create_stars()
 
@@ -89,11 +90,11 @@ class World:
         self.X_OFFSET = round(SCREEN_WIDTH / 2 - ((SCREEN_HEIGHT / 2) * math.tan(math.pi / self.POLYGON_VERTS)))
         self.CENTRAL_ANGLE = 2 * math.pi / self.POLYGON_VERTS
 
-    def create_stars(self, amount=150):
+    def create_stars(self, amount=250):
         self.stars = []
         size = max(SCREEN_WIDTH, SCREEN_HEIGHT)
         for x in range(amount):
-            self.stars.append([randint(0, size - 1), randint(0, size - 1), randint(1, 2), randint(100, 255)])
+            self.stars.append([randint(-200, size - 1), randint(-200, size - 1), randint(1, 2), randint(100, 255)])
 
     def create_map(self, safe_area=10, world_depth=100):
         self.world_map = [[1] * self.POLYGON_VERTS for _ in range(world_depth)]
@@ -150,13 +151,12 @@ class Game:
         self.life = 1
         self.level = 1
 
-        color = [randint(100, 255), randint(100, 255)]
-        if random() > 0.5:
-            color = color[::-1]
-        self.world = World(color, randint(4, 10))
-        self.player = Player(self.world)
-
+        self.next_level()
         self.game_loop()
+
+    def next_level(self):
+        self.world = World(self.level)
+        self.player = Player(self.world)
 
     def game_loop(self):
         while self.running:
@@ -172,42 +172,43 @@ class Game:
             self.render_world(projected_verts)
 
             self.render_player()
-            if self.depth > 100:
-                self.wait = True
-                self.reset_player()
+            if self.depth > self.world.WORLD_DEPTH:
+                self.level += 1
+                self.reset()
+                self.next_level()
 
-            if self.wait and time.time() - self.last_time > 2:
-                if self.depth == 1:
-                    pass
-                else:
+            if self.wait:
+                if time.time() - self.last_time > 2:
                     self.wait = False
-                    self.reset_player()
-                    self.life += 1
-            elif self.wait:
-                self.render_text("You fell!")
+                    self.reset(clock=False)
+                elif self.depth == 1:
+                    self.render_text("Level " + str(self.level))
+                else:
+                    self.render_text("You fell!")
 
             if self.title:
                 self.render_text("Run!")
                 self.render_text("Press space", location=[SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2 + 70], font=self.small_font)
             elif not self.wait:
-                if self.depth < 4:
-                    self.render_text(str(self.life))
-                if self.player.update(keys, self.depth) == "Loss":
-                    self.reset_clock()
+                if self.depth < 6:
+                    self.render_text("Life " + str(self.life))
+                if self.player.update(keys, self.depth):
+                    self.reset(position=False)
+                    self.life += 1
 
                 self.depth += self.GAME_SPEED
                 self.game_clock.tick()
 
             pg.display.update()
 
-    def reset_player(self):
-        self.depth = 1
-        self.player.xpos = self.player.RESTING_XPOS
-        self.player.ypos = self.player.RESTING_YPOS
-
-    def reset_clock(self):
-        self.wait = True
-        self.last_time = time.time()
+    def reset(self, position=True, clock=True):
+        if position:
+            self.depth = 1
+            self.player.xpos = self.player.RESTING_XPOS
+            self.player.ypos = self.player.RESTING_YPOS
+        if clock:
+            self.wait = True
+            self.last_time = time.time()
 
     def render_world(self, projected_verts):
         def build(x, v):
@@ -228,7 +229,7 @@ class Game:
         for x in range(self.world.RENDER_DISTANCE + self.world.BACK_RENDER_DISTANCE - 1):
             for v in range(self.world.POLYGON_VERTS):
                 if self.world.world_map[x + math.floor(self.depth)][v] == 1:
-                    color = [0, max(0, self.world.WORLD_COLOR[0] - x * 12), max(0, self.world.WORLD_COLOR[1] - x * 12)]
+                    color = [max(0, self.world.WORLD_COLOR[y] - x * 12) for y in range(3)]
                     vertices = build(x, v) + build(x + 1, v) + build(x + 1, v + 1) + build(x, v + 1)
                     self.draw_polygon(vertices, color)
 
@@ -239,13 +240,13 @@ class Game:
         self.screen.blit(self.player.SPRITE, (round(self.player.xpos), round(self.player.ypos)))
 
     def draw_polygon(self, vertices, color):
-        pg.gfxdraw.filled_polygon(self.screen, vertices, color)
         pg.gfxdraw.aapolygon(self.screen, vertices, color)
+        pg.gfxdraw.filled_polygon(self.screen, vertices, color)
 
     def draw_circle(self, coords, radius, color):
         if coords[0] + radius > 0 and coords[0] - radius < SCREEN_WIDTH and coords[1] + radius > 0 and coords[1] - radius < SCREEN_HEIGHT:
-            pg.gfxdraw.filled_circle(self.screen, coords[0], coords[1], radius, color)
             pg.gfxdraw.aacircle(self.screen, coords[0], coords[1], radius, color)
+            pg.gfxdraw.filled_circle(self.screen, coords[0], coords[1], radius, color)
 
     def is_onscreen(self, x, y=None):
         if y is None:
