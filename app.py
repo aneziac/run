@@ -1,5 +1,5 @@
 import os
-os.environ['PYGAME_HIDE_SUPPORT_PROMPT'] = "hide"
+os.environ["PYGAME_HIDE_SUPPORT_PROMPT"] = "hide"
 
 import pygame as pg
 from pygame import gfxdraw
@@ -12,7 +12,7 @@ import sys
 class Player(pg.sprite.Sprite):
     def __init__(self, world):
         super().__init__()
-        self.SPRITE = pg.transform.smoothscale(pg.image.load(os.path.join('assets', 'sprite.png')), (100, 100))
+        self.SPRITE = pg.transform.smoothscale(pg.image.load(os.path.join("assets/image", "sprite.png")), (100, 100))
 
         self.world = world
 
@@ -77,6 +77,7 @@ class World:
         self.RENDER_DISTANCE = 15
         self.BACK_RENDER_DISTANCE = 2
         self.WORLD_DEPTH = randint(level * 5 + 20, level * 6 + 30)
+        self.DIFFICULTY = ((4 * math.sqrt(level)) + 5) / (10 * math.sqrt(level))
 
         self.height_offset = 100
 
@@ -102,7 +103,7 @@ class World:
 
         for x in range(len(self.world_map) - safe_area):
             for y in range(self.POLYGON_VERTS):
-                if random() > 0.6:
+                if random() > self.DIFFICULTY:
                     self.world_map[x + safe_area][y] = 0
 
     def project_vertices(self, depth):
