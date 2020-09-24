@@ -53,7 +53,7 @@ class Player(pg.sprite.Sprite):
             self.xpos += self.STRAFE_SPEED
 
         if self.counter == 0:
-            if self.xpos < self.LEFT_THRESHOLD or self.xpos > self.RIGHT_THRESHOLD:
+            if (self.xpos < self.LEFT_THRESHOLD or self.xpos > self.RIGHT_THRESHOLD) and self.ypos >= self.RESTING_YPOS:
                 self.counter = -1
                 self.direction = math.copysign(1, self.xpos - (SCREEN_WIDTH // 2))
 
@@ -68,7 +68,7 @@ class Player(pg.sprite.Sprite):
 
 class World:
     def __init__(self, level):
-        self.WORLD_COLOR = [randint(0, 100), randint(100, 255), randint(100, 255)]
+        self.COLOR = [randint(0, 150), randint(100, 255), randint(100, 255)]
         self.POLYGON_VERTS = randint(4, 10)
 
         self.LOG_BASE = 2
@@ -76,12 +76,12 @@ class World:
 
         self.RENDER_DISTANCE = 15
         self.BACK_RENDER_DISTANCE = 2
-        self.WORLD_DEPTH = randint(level * 5 + 20, level * 6 + 30)
-        self.DIFFICULTY = ((4 * math.sqrt(level)) + 5) / (10 * math.sqrt(level))
+        self.DEPTH = randint(level * 5 + 20, level * 6 + 30)
+        self.DIFFICULTY = ((2 * math.sqrt(level)) + 2) / (5 * math.sqrt(level))
 
         self.height_offset = 100
 
-        self.create_map(world_depth=self.WORLD_DEPTH)
+        self.create_map(depth=self.DEPTH)
         self.create_lines()
         self.create_stars()
 
@@ -97,8 +97,8 @@ class World:
         for x in range(amount):
             self.stars.append([randint(-200, size - 1), randint(-200, size - 1), randint(1, 2), randint(100, 255)])
 
-    def create_map(self, safe_area=10, world_depth=100):
-        self.world_map = [[1] * self.POLYGON_VERTS for _ in range(world_depth)]
+    def create_map(self, safe_area=10, depth=100):
+        self.world_map = [[1] * self.POLYGON_VERTS for _ in range(depth)]
         self.world_map = self.world_map + [[0] * self.POLYGON_VERTS for _ in range(2 * self.RENDER_DISTANCE)]
 
         for x in range(len(self.world_map) - safe_area):
@@ -173,7 +173,7 @@ class Game:
             self.render_world(projected_verts)
 
             self.render_player()
-            if self.depth > self.world.WORLD_DEPTH:
+            if self.depth > self.world.DEPTH:
                 self.level += 1
                 self.reset()
                 self.next_level()
@@ -230,23 +230,23 @@ class Game:
         for x in range(self.world.RENDER_DISTANCE + self.world.BACK_RENDER_DISTANCE - 1):
             for v in range(self.world.POLYGON_VERTS):
                 if self.world.world_map[x + math.floor(self.depth)][v] == 1:
-                    color = [max(0, self.world.WORLD_COLOR[y] - x * 12) for y in range(3)]
+                    color = [max(0, self.world.COLOR[y] - x * 14) for y in range(3)]
                     vertices = build(x, v) + build(x + 1, v) + build(x + 1, v + 1) + build(x, v + 1)
                     self.draw_polygon(vertices, color)
 
         # draw vanishing point
-        self.draw_circle([SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2 - self.world.height_offset], self.world.VANISH_RADIUS, (0, 0, 0))
+        self.draw_circle([SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2 - self.world.height_offset], self.world.VANISH_RADIUS, (0, 0, 0), False)
 
     def render_player(self):
         self.screen.blit(self.player.SPRITE, (round(self.player.xpos), round(self.player.ypos)))
 
     def draw_polygon(self, vertices, color):
-        pg.gfxdraw.aapolygon(self.screen, vertices, color)
         pg.gfxdraw.filled_polygon(self.screen, vertices, color)
 
-    def draw_circle(self, coords, radius, color):
+    def draw_circle(self, coords, radius, color, out=True):
         if coords[0] + radius > 0 and coords[0] - radius < SCREEN_WIDTH and coords[1] + radius > 0 and coords[1] - radius < SCREEN_HEIGHT:
-            pg.gfxdraw.aacircle(self.screen, coords[0], coords[1], radius, color)
+            if out:
+                pg.gfxdraw.aacircle(self.screen, coords[0], coords[1], radius, color)
             pg.gfxdraw.filled_circle(self.screen, coords[0], coords[1], radius, color)
 
     def is_onscreen(self, x, y=None):
