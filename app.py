@@ -128,11 +128,13 @@ class Game:
     def __init__(self):
         pg.init()
         pg.font.init()
+        pg.mixer.init()
         pg.event.set_blocked(None)
         pg.event.set_allowed([pg.QUIT])
         self.game_clock = pg.time.Clock()
         self.font = pg.font.Font("assets/font/retro.ttf", 100)
         self.small_font = pg.font.Font("assets/font/retro.ttf", 30)
+        self.music = pg.mixer.music.load("assets/sound/music/shifty.wav")
         pg.mouse.set_visible(False)
 
         self.wait = False
@@ -166,6 +168,7 @@ class Game:
                 self.running = False
             if keys[pg.K_SPACE]:
                 self.title = False
+                pg.mixer.music.play()
 
             self.screen.fill([0] * 3)
 
